@@ -26,11 +26,10 @@ func putTx(tx *Tx) {
 }
 
 type Tx struct {
-	db        *DBCL
-	buckets   map[string]*Bucket
-	actions   []backend.Action
-	ro        bool
-	noBackend bool
+	db      *DBCL
+	buckets map[string]*Bucket
+	actions []backend.Action
+	ro      bool
 }
 
 func (tx *Tx) Bucket(name string) *Bucket {

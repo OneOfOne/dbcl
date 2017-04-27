@@ -94,11 +94,7 @@ SKIP:
 	for _, bm := range bms {
 		// handle nil
 		if b := db.buckets[bm.Name]; b == nil {
-			db.buckets[bm.Name] = &Bucket{
-				name: bm.Name,
-				mFn:  bm.MarshalFn,
-				uFn:  bm.UnmarshalFn,
-			}
+			db.buckets[bm.Name] = newBucket(bm.Name, bm.MarshalFn, bm.UnmarshalFn)
 		} else {
 			b.mFn, b.uFn = bm.MarshalFn, bm.UnmarshalFn
 		}

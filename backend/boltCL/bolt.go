@@ -13,6 +13,7 @@ func NewDBCL(opts *dbcl.Options, path string, mode os.FileMode, boltOpts *bolt.O
 	if err != nil {
 		return nil, err
 	}
+
 	return dbcl.New(opts, be)
 }
 
@@ -61,10 +62,10 @@ func applyFn(tx *bolt.Tx) backend.ApplyFn {
 		case backend.ActionDeleteBucket:
 			err = tx.DeleteBucket([]byte(a.Bucket))
 		case backend.ActionSet:
-			if _, err = tx.CreateBucketIfNotExists([]byte(a.Bucket)); err != nil {
-				return
+			var b *bolt.Bucket
+			if b, err = tx.CreateBucketIfNotExists([]byte(a.Bucket)); err == nil {
+				err = b.Put([]byte(a.Key), a.Value)
 			}
-			err = tx.Bucket([]byte(a.Bucket)).Put([]byte(a.Key), a.Value)
 		case backend.ActionDelete:
 			err = tx.Bucket([]byte(a.Bucket)).Delete([]byte(a.Key))
 		}

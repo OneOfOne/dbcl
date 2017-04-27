@@ -10,7 +10,6 @@ import (
 	"github.com/OneOfOne/dbcl"
 	"github.com/OneOfOne/dbcl/backend/boltCL"
 	"github.com/boltdb/bolt"
-	"github.com/missionMeteora/binny"
 )
 
 func TestBackend(t *testing.T) {
@@ -27,17 +26,21 @@ func TestBackend(t *testing.T) {
 		DefaultMarshalFn:   json.Marshal,
 		DefaultUnmarshalFn: json.Unmarshal,
 		BucketMapping: []dbcl.BucketMapping{
-			{Name: "bin", MarshalFn: binny.Marshal, UnmarshalFn: binny.Unmarshal},
+			{Name: "raw", MarshalFn: dbcl.MarshalRaw, UnmarshalFn: dbcl.UnmarshalRaw},
 		},
 	}
+
 	db, err := boltCL.NewDBCL(opts, fp, 0755, &bolt.Options{Timeout: 1})
 
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if err := db.Update(func(tx *dbcl.Tx) error {
-		return tx.Bucket("test").Set("hi", result{"hi", 100})
-	}, "test"); err != nil {
+		tx.Bucket("default").Set("struct", result{"hi", 100})
+		tx.Bucket("raw").Set("string", "string")
+		return nil
+	}, "default", "raw"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -53,12 +56,16 @@ func TestBackend(t *testing.T) {
 
 	db.View(func(tx *dbcl.Tx) error {
 		var r result
-		tx.Bucket("test").Get("hi", &r)
+		tx.Bucket("default").Get("struct", &r)
 
 		if r.N != "hi" || r.I != 100 {
 			t.Errorf("got %#+v", r)
 		}
-
+		var v string
+		tx.Bucket("raw").Get("string", &v)
+		if v != "string" {
+			t.Errorf("got %#+v", r)
+		}
 		return nil
 	})
 
