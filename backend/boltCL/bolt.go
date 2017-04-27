@@ -1,6 +1,7 @@
 package boltCL
 
 import (
+	"log"
 	"os"
 
 	"github.com/OneOfOne/dbcl"
@@ -52,8 +53,6 @@ func (db *boltBE) Close() error {
 
 func (db *boltBE) Raw() interface{} { return db.DB }
 
-// Close() error
-
 func applyFn(tx *bolt.Tx) backend.ApplyFn {
 	return func(a *backend.Action) (err error) {
 		switch a.Type {
@@ -68,6 +67,8 @@ func applyFn(tx *bolt.Tx) backend.ApplyFn {
 			}
 		case backend.ActionDelete:
 			err = tx.Bucket([]byte(a.Bucket)).Delete([]byte(a.Key))
+		default:
+			log.Panicf("invalid action: %+v", a)
 		}
 		return
 	}

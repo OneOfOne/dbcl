@@ -1,16 +1,9 @@
 package dbcl
 
 import (
-	"errors"
-	"sort"
 	"sync"
 
 	"github.com/OneOfOne/dbcl/backend"
-)
-
-var (
-	ErrNotFound = errors.New("not found")
-	ErrReadOnly = errors.New("write operation on a ReadOnly Tx.")
 )
 
 func newBucket(name string, mFn MarshalFn, uFn UnmarshalFn) *Bucket {
@@ -102,28 +95,6 @@ func (b *Bucket) Delete(key string) error {
 	b.tx.action(backend.ActionDelete, b.name, key, nil)
 
 	return nil
-}
-
-func (b *Bucket) Len() int { return len(b.data) }
-
-func (b *Bucket) Keys() []string {
-	keys := make([]string, 0, len(b.data)+len(b.tmp))
-	for k := range b.data {
-		if v, ok := b.tmp[k]; !ok || v == nil {
-			keys = append(keys, k)
-		}
-	}
-	return keys
-}
-
-func (b *Bucket) SortedKeys(rev bool) []string {
-	keys := b.Keys()
-	if rev {
-		sort.Sort(sort.Reverse(sort.StringSlice(keys)))
-	} else {
-		sort.Sort(sort.StringSlice(keys))
-	}
-	return keys
 }
 
 func (b *Bucket) commit() {

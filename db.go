@@ -9,9 +9,13 @@ import (
 	"github.com/OneOfOne/dbcl/backend"
 )
 
+// Errors
 var (
-	ErrNoBuckets = errors.New("no buckets specified")
-	ErrClosed    = errors.New("db is closed")
+	ErrNoBuckets      = errors.New("no buckets specified")
+	ErrBucketNotFound = errors.New("bucket not found")
+	ErrClosed         = errors.New("db is closed")
+	ErrNotFound       = errors.New("not found")
+	ErrReadOnly       = errors.New("write operation on a ReadOnly Tx.")
 
 	defaultOptions = &Options{
 		DefaultMarshalFn:   json.Marshal,
@@ -19,26 +23,31 @@ var (
 	}
 )
 
+// Options sets options used by DBCL.
 type Options struct {
 	DefaultMarshalFn   MarshalFn
 	DefaultUnmarshalFn UnmarshalFn
 	BucketMapping      []BucketMapping
 }
 
+// BucketMapping allows using a custom Marshal/Unmarshal funcs for the specified bucket.
 type BucketMapping struct {
 	Name        string
 	MarshalFn   MarshalFn
 	UnmarshalFn UnmarshalFn
 }
 
-// DBCL aka DataBase Cache Layer
+// DBCL aka Database Cache Layer
 type DBCL struct {
 	buckets map[string]*Bucket
 	opts    *Options
 	be      backend.Backend
 	m       sync.RWMutex
+	txPool  sync.Pool
 }
 
+// New returns a new DBCL, with optionally the specified Backend.
+// If backend is nil, it will be a simple memory-only store.
 func New(opts *Options, be backend.Backend) (*DBCL, error) {
 	if opts == nil {
 		opts = defaultOptions
@@ -71,9 +80,13 @@ func New(opts *Options, be backend.Backend) (*DBCL, error) {
 		}
 	}
 
+	db.txPool.New = func() interface{} { return &Tx{db: db} }
+
 	return db, nil
 }
 
+// CreateBucketMapping allows creating new buckets with the specfied type mapping.
+// Note: You must either call this or set Options.BucketMapping before trying to access those buckets for the first time.
 func (db *DBCL) CreateBucketMapping(bms ...BucketMapping) error {
 	if db.be == nil {
 		goto SKIP
@@ -104,20 +117,6 @@ SKIP:
 	return nil
 }
 
-func (db *DBCL) DeleteBucket(name string) error {
-	if db.be != nil {
-		if err := db.be.Update(func(apply backend.ApplyFn) error {
-			return apply(&backend.Action{Type: backend.ActionDeleteBucket, Bucket: name})
-		}); err != nil {
-			return err
-		}
-	}
-	db.m.Lock()
-	delete(db.buckets, name)
-	db.m.Unlock()
-	return nil
-}
-
 func (db *DBCL) loadAll(bucket, key string, value []byte) error {
 	b := db.buckets[bucket]
 	if b == nil {
@@ -132,30 +131,29 @@ func (db *DBCL) loadAll(bucket, key string, value []byte) error {
 }
 
 func (db *DBCL) View(fn func(tx *Tx) error, bnames ...string) error {
-	tx, err := getTx(db, bnames, true)
+	tx, err := db.getTx(bnames, true)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		tx.rollback()
-		putTx(tx)
+		db.putTx(tx)
 	}()
 
 	return fn(tx)
 }
 
 func (db *DBCL) Update(fn func(tx *Tx) error, bnames ...string) (err error) {
-	log.Println(0)
-	tx, err := getTx(db, bnames, false)
+	tx, err := db.getTx(bnames, false)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		// if v := recover(); v != nil {
-		// 	log.Printf("panic (%T): %v", v, v)
-		// 	tx.rollback()
-		// }
-		putTx(tx)
+		if v := recover(); v != nil {
+			log.Printf("panic (%T): %v", v, v)
+			tx.rollback()
+		}
+		db.putTx(tx)
 	}()
 
 	if err := fn(tx); err != nil {
@@ -164,6 +162,27 @@ func (db *DBCL) Update(fn func(tx *Tx) error, bnames ...string) (err error) {
 	}
 
 	return tx.commit()
+}
+
+func (db *DBCL) Get(bucket, key string, out interface{}) error {
+	db.m.RLock()
+	b := db.buckets[bucket]
+	db.m.RUnlock()
+	if b == nil {
+		return ErrNotFound
+	}
+
+	b.m.RLock()
+	err := b.Get(key, out)
+	b.m.RUnlock()
+
+	return err
+}
+
+func (db *DBCL) Set(bucket, key string, v interface{}) error {
+	return db.Update(func(tx *Tx) error {
+		return tx.Bucket(bucket).Set(key, v)
+	}, bucket)
 }
 
 func (db *DBCL) Close() error {

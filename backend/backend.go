@@ -1,8 +1,10 @@
 package backend
 
+// Backend is *usually* a disk data-store to be used by DBCL.
+// Note that once the Backend gets passed to DBCL, you *should* not call Close manually.
 type Backend interface {
 	LoadAll(LoadFn) error
-	Update(UpdateFn) error // inception
+	Update(UpdateFn) error
 	Close() error
 
 	Raw() interface{}
