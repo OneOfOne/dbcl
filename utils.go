@@ -8,9 +8,9 @@ type UnmarshalFn func(data []byte, v interface{}) error
 func MarshalRaw(v interface{}) ([]byte, error) {
 	switch v := v.(type) {
 	case []byte:
-		return v, nil
+		return copyBytes(v), nil
 	case *[]byte:
-		return *v, nil
+		return copyBytes(*v), nil
 	case string:
 		return []byte(v), nil
 	case *string:
@@ -23,7 +23,7 @@ func MarshalRaw(v interface{}) ([]byte, error) {
 func UnmarshalRaw(data []byte, v interface{}) error {
 	switch v := v.(type) {
 	case *[]byte:
-		*v = data
+		*v = copyBytes(data)
 	case *string:
 		*v = string(data)
 	default:
@@ -31,4 +31,10 @@ func UnmarshalRaw(data []byte, v interface{}) error {
 	}
 
 	return nil
+}
+
+func copyBytes(in []byte) []byte {
+	out := make([]byte, len(in))
+	copy(out, in)
+	return out
 }

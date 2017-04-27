@@ -71,12 +71,36 @@ func (b *Bucket) Set(key string, value interface{}) error {
 	return nil
 }
 
+func (b *Bucket) GetRaw(key string) []byte {
+	if b.tx != nil {
+		if v, ok := b.tmp[key]; ok {
+			return copyBytes(v)
+		}
+	}
+
+	return copyBytes(b.data[key])
+}
+
+func (b *Bucket) SetRaw(key string, val []byte) error {
+	if b.tx == nil {
+		return ErrReadOnly
+	}
+
+	val = copyBytes(val)
+	b.tmp[key] = val
+	b.tx.action(backend.ActionSet, b.name, key, val)
+
+	return nil
+}
+
 func (b *Bucket) Delete(key string) error {
 	if b.tx == nil {
 		return ErrReadOnly
 	}
+
 	b.tmp[key] = nil
 	b.tx.action(backend.ActionDelete, b.name, key, nil)
+
 	return nil
 }
 
