@@ -48,6 +48,7 @@ type DBCL struct {
 
 // New returns a new DBCL, with optionally the specified Backend.
 // If backend is nil, it will be a simple memory-only store.
+// If opts is nil, it defaults to using json.Marshal/json.Unmarshal.
 func New(opts *Options, be backend.Backend) (*DBCL, error) {
 	if opts == nil {
 		opts = defaultOptions
